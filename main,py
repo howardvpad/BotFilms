@@ -14,11 +14,9 @@ from telegram.ext import (
     ContextTypes
 )
 
-# Загрузка базы фильмов
 with open('movies_db.json', 'r', encoding='utf-8') as f:
     MOVIES_DB = json.load(f)
 
-# Клавиатура главного меню
 def main_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("🎲 Случайный фильм")],
@@ -26,14 +24,12 @@ def main_keyboard():
         [KeyboardButton("🔍 Поиск фильма")]
     ], resize_keyboard=True)
 
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 Выберите действие:",
         reply_markup=main_keyboard()
     )
 
-# Обработка кнопок
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
@@ -62,7 +58,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data['waiting_for_search'] = True
 
-# Обработка поиска
 async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'waiting_for_search' in context.user_data:
         query = update.message.text.lower()
