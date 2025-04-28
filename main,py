@@ -1,76 +1,97 @@
 import json
-import logging
 import random
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-# Настройка логов
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardRemove
 )
-logger = logging.getLogger(__name__)
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes
+)
 
 # Загрузка базы фильмов
 with open('movies_db.json', 'r', encoding='utf-8') as f:
     MOVIES_DB = json.load(f)
 
+# Клавиатура главного меню
+def main_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("🎲 Случайный фильм")],
+        [KeyboardButton("📋 Список фильмов")],
+        [KeyboardButton("🔍 Поиск фильма")]
+    ], resize_keyboard=True)
+
 # Команда /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🎬 Кино-бот v2.0\n"
-        "Доступные команды:\n"
-        "/start - Начать\n"
-        "/list - Все фильмы\n"
-        "/random - Случайный фильм\n\n"
-        "Или просто напиши название фильма!"
+        "🎬 Выберите действие:",
+        reply_markup=main_keyboard()
     )
 
-# Команда /list
-async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    movies_list = "\n".join([f"• {m['title']} ({m['year']})" for m in MOVIES_DB])
-    await update.message.reply_text(f"📂 Все фильмы:\n{movies_list}")
-
-# Команда /random
-async def random_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    movie = random.choice(MOVIES_DB)
-    response = (
-        f"🎲 <b>Случайный фильм:</b>\n"
-        f"🎬 {movie['title']} ({movie['year']})\n"
-        f"📌 Жанр: {movie['genre']}\n"
-        f"⭐ Рейтинг: {movie['rating']}/10\n"
-        f"📖 Описание: {movie['description']}"
-    )
-    await update.message.reply_text(response, parse_mode='HTML')
-
-# Поиск фильма
-async def search_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.message.text.lower()
-    found = [m for m in MOVIES_DB if query in m["title"].lower()]
+# Обработка кнопок
+async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     
-    if not found:
-        await update.message.reply_text("❌ Фильм не найден. Попробуйте /list или /random.")
-        return
+    if text == "🎲 Случайный фильм":
+        movie = random.choice(MOVIES_DB)
+        await update.message.reply_text(
+            f"🎬 <b>{movie['title']}</b> ({movie['year']})\n"
+            f"⭐ Рейтинг: {movie['rating']}/10\n"
+            f"📖 Описание: {movie['description']}",
+            parse_mode='HTML',
+            reply_markup=main_keyboard()
+        )
     
-    movie = found[0]
-    response = (
-        f"🎬 <b>{movie['title']}</b> ({movie['year']})\n"
-        f"📌 Жанр: {movie['genre']}\n"
-        f"⭐ Рейтинг: {movie['rating']}/10\n"
-        f"📖 Описание: {movie['description']}"
-    )
-    await update.message.reply_text(response, parse_mode='HTML')
+    elif text == "📋 Список фильмов":
+        movies_list = "\n".join([f"• {m['title']} ({m['year']})" for m in MOVIES_DB])
+        await update.message.reply_text(
+            f"📋 <b>Все фильмы:</b>\n{movies_list}",
+            parse_mode='HTML',
+            reply_markup=main_keyboard()
+        )
+    
+    elif text == "🔍 Поиск фильма":
+        await update.message.reply_text(
+            "Введите название фильма:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        context.user_data['waiting_for_search'] = True
 
-# Запуск бота
-def main() -> None:
-    application = Application.builder().token("MYToken").build()
+# Обработка поиска
+async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if 'waiting_for_search' in context.user_data:
+        query = update.message.text.lower()
+        found = [m for m in MOVIES_DB if query in m["title"].lower()]
+        
+        if not found:
+            await update.message.reply_text(
+                "❌ Фильм не найден",
+                reply_markup=main_keyboard()
+            )
+        else:
+            movie = found[0]
+            await update.message.reply_text(
+                f"🎬 <b>{movie['title']}</b> ({movie['year']})\n"
+                f"⭐ Рейтинг: {movie['rating']}/10\n"
+                f"📖 Описание: {movie['description']}",
+                parse_mode='HTML',
+                reply_markup=main_keyboard()
+            )
+        
+        del context.user_data['waiting_for_search']
 
-    # Регистрация команд
+def main():
+    application = Application.builder().token("ВАШ_ТОКЕН").build()
+    
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("list", list_movies))
-    application.add_handler(CommandHandler("random", random_movie))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie))
-
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search))
+    
     application.run_polling()
 
 if __name__ == "__main__":
